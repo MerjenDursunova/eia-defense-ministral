@@ -16,6 +16,8 @@ import os
 import time
 
 import backoff
+from PIL import Image
+import io
 import openai
 # from openai.error import (
 #     APIConnectionError,
@@ -81,7 +83,7 @@ class OpenaiEngine(Engine):
         self.request_interval = 0 if rate_limit == -1 else 60.0 / rate_limit
         self.next_avil_time = [0] * len(self.api_keys)
         self.current_key_idx = 0
-        self.client = openai.OpenAI()
+        self.client = openai.OpenAI(timeout=240)
         self.seed = seed
         Engine.__init__(self, **kwargs)
 
@@ -105,15 +107,20 @@ class OpenaiEngine(Engine):
 
         if turn_number == 0:
             base64_image = encode_image(image_path)
+            _im = Image.open(io.BytesIO(base64.b64decode(base64_image)))
+            _im.thumbnail((640, 640))
+            _buf = io.BytesIO()
+            _im.convert("RGB").save(_buf, format="JPEG", quality=70)
+            base64_image = base64.b64encode(_buf.getvalue()).decode("utf-8")
             # Assume one turn dialogue
             prompt1_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
                 {"role": "user",
                  "content": [{"type": "text", "text": prompt1}, {"type": "image_url", "image_url": {"url":
-                                                                                                        f"data:image/jpeg;nase64,{base64_image}",
-                                                                                                    "detail": "high"},
+                                                                                                        f"data:image/jpeg;base64,{base64_image}"},
                                                                  }]},
             ]
+            print(f'--> calling {self.model} turn0')
             response1 = self.client.chat.completions.create(
                 model=model if model else self.model,
                 messages=prompt1_input,
@@ -126,14 +133,19 @@ class OpenaiEngine(Engine):
             return answer1
         elif turn_number == 1:
             base64_image = encode_image(image_path)
+            _im = Image.open(io.BytesIO(base64.b64decode(base64_image)))
+            _im.thumbnail((640, 640))
+            _buf = io.BytesIO()
+            _im.convert("RGB").save(_buf, format="JPEG", quality=70)
+            base64_image = base64.b64encode(_buf.getvalue()).decode("utf-8")
             prompt2_input = [
                 {"role": "system", "content": [{"type": "text", "text": prompt0}]},
                 {"role": "user",
                  "content": [{"type": "text", "text": prompt1}, {"type": "image_url", "image_url": {"url":
-                                                                                                        f"data:image/jpeg;nase64,{base64_image}",
-                                                                                                    "detail": "high"}, }]},
+                                                                                                        f"data:image/jpeg;base64,{base64_image}"}, }]},
                 {"role": "assistant", "content": [{"type": "text", "text": f"\n\n{ouput__0}"}]},
                 {"role": "user", "content": [{"type": "text", "text": prompt2}]}, ]
+            print(f'--> calling {self.model} turn1')
             response2 = self.client.chat.completions.create(
                 model=model if model else self.model,
                 messages=prompt2_input,

@@ -31,8 +31,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 openai_config = {
     "api_key": os.environ.get("OPENAI_API_KEY"),
-    "rate_limit": -1,
-    "model": "gpt-4-vision-preview",
+    "rate_limit": 6,
+    "model": os.environ.get("AGENT_MODEL", "gpt-4-vision-preview"),
     "temperature": 0,
     "seed": 42
 }

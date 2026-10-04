@@ -7,4 +7,5 @@ eval_results/
 *.html
 *.pyc
 *.DS_store
-*/__pycache__
+*/__pycache__eval_results/
+data/
