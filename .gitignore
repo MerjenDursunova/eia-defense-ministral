@@ -9,3 +9,4 @@ eval_results/
 *.DS_store
 */__pycache__eval_results/
 data/
+{{pkgetc}}/

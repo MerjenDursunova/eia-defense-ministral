@@ -314,6 +314,22 @@ async def get_screenshot_and_choices(confirmed_task, website_url, taken_actions,
                     else:
                         pass
 
+                # ---- DEFENSE v0.1: action-layer guardrail ----
+                if got_one_answer and target_action.strip() not in ["PRESS ENTER", "TERMINATE"]:
+                    try:
+                        from defense import guard_check
+                        _allowed, _reason = guard_check(
+                            confirmed_task, target_action, target_element_text, target_value)
+                    except Exception as _e:
+                        _allowed, _reason = True, f"guard exception: {_e}"
+                    if not _allowed:
+                        print(f"DEFENSE BLOCKED: {_reason}")
+                        log += f"\nDEFENSE BLOCKED: {_reason}"
+                        new_action = "[DEFENSE BLOCKED] " + str(target_element_text)[:80] + " -> " + str(_reason)[:80]
+                        got_one_answer = False
+                        target_element = []
+                # ---- end defense ----
+
                 if got_one_answer:
                     terminal_width = 10
                     print("-" * terminal_width)
