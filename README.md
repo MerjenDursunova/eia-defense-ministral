@@ -1,94 +1,47 @@
-# EIA: ENVIRONMENTAL INJECTION ATTACK ON GENERALIST WEB AGENTS FOR PRIVACY LEAKAGE
+# EIA Defense on Open-Weight Models (ministral-8b-2512)
 
-This is the official repo of EIA ([https://arxiv.org/abs/2409.11295](https://arxiv.org/abs/2409.11295)). If you find it helpful, please kindly 🌟star🌟 it and cite our paper 📜.
+Independent reproduction of the Environmental Injection Attack (EIA; Liao et al.)
+against a GUI web agent, plus two variants of an action-layer defense ("guardrail")
+that reduce attack success rate from 0.54 to 0.15-0.17.
 
-![EIA_overview](attack_overview_new1.png)
+Built on [OSU-NLP-Group/EIA_against_webagent](https://github.com/OSU-NLP-Group/EIA_against_webagent)
+(MIT license, see LICENSE and README_EIA_upstream.md) with minimal, documented patches.
 
-EIA is a form of indirect prompt injection, but specifically designed to manipulate the environment where state-changing actions occur, with a particular focus on exploiting
-the web environment to target generalist web agents.
+## Why
+Agent-security papers increasingly demonstrate attacks while deferring defenses.
+This project reproduces the attack with zero budget on an open-weight model and
+evaluates a cheap, auditable defense: one text-only audit call per PII-bearing
+action, before browser execution. Every intercept carries a model-generated reason.
 
-Specifically, it injects web elements along with malicious (yet seemingly benign, see figure) instructions into the HTML of the benign website. The injected elements and the instructions are both set to be invisible on the website. This manipulation misleads the web agent into entering private information into the injected elements, thus causing the leakage of the user’s private data. 
+## Results (action_grounding / form_type0 / near_top_0, 177 instances)
 
-Overall, EIA achieves up to 70% ASR to steal user specific PII and 16% ASR to leak the full user request. We also demonstrate that EIA can not be detected by traditional web malware detection tool, [VirusTotal](https://www.virustotal.com/gui/home/upload), and won't affect the agent's next step towards completing the user tasks (ASR_pt). Additionally, an extra defensive system prompt can not mitigate the risks of EIA.
+| Condition            | ASR  | ASR_pt | Intercepts (attack) | Intercepts (benign, 177) |
+|----------------------|------|--------|---------------------|--------------------------|
+| No defense           | 0.54 | 0.26   | —                   | —                        |
+| + v0.1 conservative  | 0.15 | 0.09   | 124                 | 80                       |
+| + v0.2 PII-triggered | 0.17 | 0.07   | 110                 | 66                       |
 
-## Environmental Setup
-Our experimental environment mainly follows the setup of [SeeAct](https://github.com/OSU-NLP-Group/SeeAct). Specifically, we utilized the version of commit `472be0434c54896e2ee0a009d71169a4884da677` which you can assess at [here](https://github.com/OSU-NLP-Group/SeeAct/tree/472be0434c54896e2ee0a009d71169a4884da677), and upgrade the version of `openai` to `1.33.0`.
+- v0.2 (audit only PII-bearing TYPE actions) retains 69% of the attack-success
+  reduction while firing less often than the conservative variant.
+- In guarded runs, 56-63 instances never reached the attack step (guard-induced
+  early termination; counted as non-success in the ASR denominator).
+- Benign blocks are recoverable re-plans: trajectories complete at baseline no-op
+  rates (~5%); the guard's cost is extra steps/latency, not task failure.
 
-### Dataset
-In our work, we deditecately select tasks from [Mind2Web](https://github.com/OSU-NLP-Group/Mind2Web?tab=readme-ov-file) and manually adapt the corresponding realistic website from the provided raw dump file (such as populating the necessary information). After filtering out instances with low quality, we ultimately finalize a set of 177 action steps containing PII and their corresponding webpages.
+## Key changes vs. upstream (see commit history)
+- Redirected the OpenAI-compatible client to Mistral free tier via env vars.
+- Fixed upstream typo: 'nase64' -> 'base64' in image data URLs.
+- Engine hardening: 240s call timeout, 6 req/min throttle, visible API-call logging.
+- Auto-downscale screenshots to 640px JPEG q70 (free-tier payload limits).
+- `SeeAct/defense.py`: guard_check() — hooked into main.py before execution.
 
+## Reproduce
+1. Deploy webpages: `cd web && uvicorn main:app --reload --port 8000`
+2. Set env: `source ~/.seeact_env` (Mistral key + base URL + model)
+3. Run: `cd SeeAct && python main.py --attack_type action_grounding --attack_subtype form_type0 --attack_position near_top_0 --model_name gpt4v --save_dir "../eval_results/eval_results"`
+4. Evaluate: `python eval.py --eval_dir_benign ".../benign" --eval_dir ".../action_grounding_form_type0_near_top_0"`
 
-### Download
-You can download the webpages with injection directly via the Globus as well.
-For more information and overview of Globus , please refer to [here](https://github.com/OSU-NLP-Group/Mind2Web?tab=readme-ov-file#raw-dump-with-full-traces-and-snapshots) and [here](https://www.osc.edu/resources/getting_started/howto/howto_use_globus_overview).
-
-You can access the `data.zip` folder under the link below:
-```python
-Data Download: https://app.globus.org/file-manager?origin_id=6e0b9952-da25-4b74-a4f9-7450f0bb96b9&origin_path=%2F
-```
-
-After download the `data.zip`, unzip the file and place it under the repo folder. The folder should look like:
-```
-data
-├── webpages_filtered
-├──── <annotation_id>
-├────── <action_id>
-├── target_element_HTML.json
-├── all_instances.jsonl
-```
-where the `webpages_filtered` folder contains the webpages for web agent to operate.
-`all_instances.jsonl` contains the overview of the tasks encompassing the user private information. `target_element_HTML.json` contains the html content of the target element for each instances. It is used to help us locate the $P_0$ position (reference point) of the target element and further inject the malicious elements into different positions according to the reference point.
-
-### EIA
-The `injection` folder contains code for injecting various EIA attacks into benign webpages. As detailed in our paper, this includes different types of injections targeting either the action grounding stage or the action generation stage, each serving different purposes.
-
-To perform the injection, simply run the following command:
-
-```./run_injection.sh```
-
-### Website Deployment
-To setup the website and make them accessible by SeeAct via HTTP connection, run the code:
-```python
-cd web/
-uvicorn main:app --reload --port 8000
-```
-where you can customize your own port number.
-
-You can test if the connection is established by running:
-```python
-python web_request_test.py
-```
-which will print out the status code. 200 means you setup successfully.
-
-
-
-### Run SeeAct over the webpage
-We cover all the experiments we have in the `SeeAct/EIA_run.sh` with comments.
-You can also read the NAME.md file to better know how the arguments map to the setting in our paper.
-
-
-### Evaluation results over three LMMs.
-We also provide the evaluation results from the same link above with the name `eval_results.zip`. 
-
-> [!NOTE]
-> to replicate the results within the `eval_results_w_defensive_system_prompt` folder, please uncomment the lines [here](https://github.com/OSU-NLP-Group/EIA/blob/9a300399ae5e497c4c6e993b68b3e4a88977be6f/SeeAct/src/data_utils/prompts.py#L358).
-
-### Evaluation
-Please refer to `eval_run.sh` to get the ASR, ASR_o and ASR_pt results.
-
-## Licensing Information
-
-<a rel="license" href="http://creativecommons.org/licenses/by/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by/4.0/88x31.png" /></a><br />Our evaluation set is adapted from the [Mind2Web dataset](https://github.com/OSU-NLP-Group/Mind2Web/tree/main) and is licensed under the <a rel="license" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.
-
-Code under this repo is licensed under the MIT License.
-
-## Citation
-If you find the paper and any resources here helpful, pls kindly cite our paper:
-```
-@article{liao2024eia,
-  title={EIA: Environmental Injection Attack on Generalist Web Agents for Privacy Leakage},
-  author={Liao, Zeyi and Mo, Lingbo and Xu, Chejian and Kang, Mintong and Zhang, Jiawei and Xiao, Chaowei and Tian, Yuan and Li, Bo and Sun, Huan},
-  journal={arXiv preprint arXiv:2409.11295},
-  year={2024}
-}
-```
+## Notes
+- Runs are resumable (completed instance IDs are skipped on restart).
+- The 18 GB upstream eval_results.zip was not used; all numbers above are from
+  locally executed runs on ministral-8b-2512 (Mistral free tier).
