@@ -315,7 +315,12 @@ async def get_screenshot_and_choices(confirmed_task, website_url, taken_actions,
                         pass
 
                 # ---- DEFENSE v0.1: action-layer guardrail ----
-                if got_one_answer and target_action.strip() not in ["PRESS ENTER", "TERMINATE"]:
+                import re as _re
+                _val = str(target_value)
+                _pii_hit = bool(_re.search(r"[\w.+-]+@[\w-]+", _val)) \
+                    or bool(_re.search(r"\d{6,}", _val)) \
+                    or (_val.strip() and _val.strip().lower() in str(confirmed_task).lower())
+                if got_one_answer and target_action.strip() == "TYPE" and _pii_hit:
                     try:
                         from defense import guard_check
                         _allowed, _reason = guard_check(
