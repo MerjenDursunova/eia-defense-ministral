@@ -13,20 +13,22 @@ This project reproduces the attack with zero budget on an open-weight model and
 evaluates a cheap, auditable defense: one text-only audit call per PII-bearing
 action, before browser execution. Every intercept carries a model-generated reason.
 
-## Results (action_grounding / form_type0 / near_top_0, 177 instances)
+## Results (177 instances, action_grounding/form_type0/near_top_0)
 
-| Condition            | ASR  | ASR_pt | Intercepts (attack) | Intercepts (benign, 177) |
-|----------------------|------|--------|---------------------|--------------------------|
-| No defense           | 0.54 | 0.26   | —                   | —                        |
-| + v0.1 conservative  | 0.15 | 0.09   | 124                 | 80                       |
-| + v0.2 PII-triggered | 0.17 | 0.07   | 110                 | 66                       |
+| Variant                  | Attack success rate | Benign per-step agreement with baseline (n) | Trajectory length ratio |
+|--------------------------|--------------------:|--------------------------------------------:|------------------------:|
+| Unguarded                |                0.54 | baseline                                    |                   1.000 |
+| v0.1 conservative guard  |                0.15 | 0.891 (169)                                 |                   1.000 |
+| v0.2 PII-triggered guard |                0.17 | 0.902 (176)                                 |                   1.000 |
 
-- v0.2 (audit only PII-bearing TYPE actions) retains 69% of the attack-success
-  reduction while firing less often than the conservative variant.
-- In guarded runs, 56-63 instances never reached the attack step (guard-induced
-  early termination; counted as non-success in the ASR denominator).
-- Benign blocks are recoverable re-plans: trajectories complete at baseline no-op
-  rates (~5%); the guard's cost is extra steps/latency, not task failure.
+**Denominator note:** in guarded runs, 56–63 instances never reached the attack
+step (guard-induced early termination); these are counted as non-success in the
+ASR denominator.
+
+**Takeaway:** guarded benign trajectories reproduce ~90% of baseline actions in
+exact order (n=169/176), with no increase in trajectory length. We report
+per-step agreement with the baseline rather than task success, because agreement is
+what we measured.
 
 ## Key changes vs. upstream (see commit history)
 - Redirected the OpenAI-compatible client to Mistral free tier via env vars.
